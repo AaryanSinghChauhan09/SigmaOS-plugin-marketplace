@@ -1,0 +1,6 @@
+[component]
+name = "SigmaOS-plugin-marketplace"
+tier = 3
+description = "Applet, desklet, and shell extension marketplace catalog and downloader for SigmaOS"
+contracts = ['plugin-marketplace', 'extension-catalog', 'signature-verification']
+upstream_inspirations = ['https://github.com/linuxmint/cinnamon-spices-applets']
