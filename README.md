@@ -1,9 +1,9 @@
 # SigmaOS-plugin-marketplace
 
-Applet/desklet/extension marketplace
+SigmaOS plugin marketplace component for SigmaOS
 
 - **Category:** Desktop/UI
-- **Engine:** plugin_marketplace
+- **Engine:** theme_marketplace
 - **Language:** Rust
 
 ## Build & Test

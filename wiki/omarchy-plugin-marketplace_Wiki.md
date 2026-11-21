@@ -1,7 +1,7 @@
 # SigmaOS-SigmaOS-plugin-marketplace Component Wiki
 
 ## Overview
-SigmaOS-SigmaOS-plugin-marketplace provides DESCRIPTION for the SigmaOS operating system. It demonstrates the subsystem and integration within the SigmaOS ecosystem, following the principles of clear abstraction and deterministic initialization.
+SigmaOS-SigmaOS-plugin-marketplace provides Plugin catalog, install, and update for the SigmaOS operating system. It demonstrates the subsystem and integration within the SigmaOS ecosystem, following the principles of clear abstraction and deterministic initialization.
 
 ## Principles
 - Single Responsibility
@@ -20,10 +20,10 @@ SigmaOS-SigmaOS-plugin-marketplace follows a SigmaOS-plugin-marketplace pattern:
 
 ## API
 The component provides the following public APIs:
-- `core::manage(SigmaOS-plugin-marketplace)` - Manage a SigmaOS-plugin-marketplace by given configuration
-- `core::register(SigmaOS-plugin-marketplace)` - Register a SigmaOS-plugin-marketplace by given name
-- `core::status::SigmaOS-plugin-marketplace()` - Get SigmaOS-plugin-marketplace status and SigmaOS-plugin-marketplace availability
-- `core::track::SigmaOS-plugin-marketplace()` - Track SigmaOS-plugin-marketplace management and SigmaOS-plugin-marketplace tracking
+-  - Manage a SigmaOS-plugin-marketplace by given configuration
+-  - Register a SigmaOS-plugin-marketplace by given name
+-  - Get SigmaOS-plugin-marketplace status and SigmaOS-plugin-marketplace availability
+-  - Track SigmaOS-plugin-marketplace management and SigmaOS-plugin-marketplace tracking
 - Error types for SigmaOS-plugin-marketplace failure scenarios or unsupported SigmaOS-plugin-marketplace types
 
 ## Test Structure (Arrange-Act-ASSERT)
@@ -33,24 +33,10 @@ All tests follow the AAA pattern:
 3. **Assert**: Verify the expected SigmaOS-plugin-marketplace results
 
 Example:
-```rust
-#[test]
-fn test_SigmaOS-plugin-marketplace_aaa() {
-    // Arrange
-    let SigmaOS-plugin-marketplace = SigmaOS-plugin-marketplace::new("my-SigmaOS-plugin-marketplace");
-    
-    // Act
-    let result = core::manage(SigmaOS-plugin-marketplace);
-    
-    // Assert
-    assert!(result.is_ok());
-    let managed = result.unwrap();
-    assert!(managed.is_managed());
-}
-```
+
 
 ## Development
-- Follows Rust best practices with `#![forbid(unsafe_code)]`
+- Follows Rust best practices with 
 - SigmaOS-plugin-marketplace initialization is best-effort; gracefully degrades on unsupported configurations
 - Comprehensive error types for all SigmaOS-plugin-marketplace failure scenarios
 - Unit tests provided for SigmaOS-plugin-marketplace management and configuration
