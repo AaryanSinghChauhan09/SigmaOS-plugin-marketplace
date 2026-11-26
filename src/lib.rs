@@ -159,6 +159,11 @@ impl FakeBackend {
         }
     }
 }
+impl Default for FakeBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl MarketBackend for FakeBackend {
     fn install(&self, id: &str, version: &str) -> Result<PathBuf, String> {
         if self.fail_install.get() {
@@ -203,18 +208,19 @@ impl SigmaOSPluginMarketplace {
     }
 
     fn seed_catalog(&mut self) {
-        let seeds: [(
-            &str,
-            &str,
-            &str,
-            &[&str],
-            &str,
-            &str,
-            &[&str],
+        type Seed = (
+            &'static str,
+            &'static str,
+            &'static str,
+            &'static [&'static str],
+            &'static str,
+            &'static str,
+            &'static [&'static str],
             f32,
             u64,
-            &str,
-        ); 6] = [
+            &'static str,
+        );
+        let seeds: [Seed; 6] = [
             (
                 "weather",
                 "Weather Widget",
