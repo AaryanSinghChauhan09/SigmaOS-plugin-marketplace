@@ -63,13 +63,13 @@ pub enum MarketError {
 impl fmt::Display for MarketError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotInCatalog(id)=>write!(f,"not in catalog: {id}"),
-            Self::AlreadyInstalled(id)=>write!(f,"{id} already installed"),
-            Self::NotInstalled(id)=>write!(f,"{id} not installed"),
-            Self::BadVersion(v)=>write!(f,"bad version {v}"),
-            Self::Backend(e)=>write!(f,"backend: {e}"),
-            Self::NoUpdates=>write!(f,"no updates available"),
-            Self::InstallFailed(e)=>write!(f,"install: {e}"),
+            Self::NotInCatalog(id) => write!(f, "not in catalog: {id}"),
+            Self::AlreadyInstalled(id) => write!(f, "{id} already installed"),
+            Self::NotInstalled(id) => write!(f, "{id} not installed"),
+            Self::BadVersion(v) => write!(f, "bad version {v}"),
+            Self::Backend(e) => write!(f, "backend: {e}"),
+            Self::NoUpdates => write!(f, "no updates available"),
+            Self::InstallFailed(e) => write!(f, "install: {e}"),
         }
     }
 }
@@ -96,18 +96,21 @@ impl MarketBackend for HostBackend {
         // Delegate to plugin-registry HostBackend via env-configured dir.
         // For now: run the sigmaos-plugins binary if on PATH, else error.
         let out = std::process::Command::new("sigmaos-plugins")
-            .args(["install", id, version]).output();
+            .args(["install", id, version])
+            .output();
         match out {
-            Ok(o) if o.status.success() => {
-                Ok(PathBuf::from(format!("/usr/lib/sigmaos/plugins/{}-{}", id, version)))
-            }
+            Ok(o) if o.status.success() => Ok(PathBuf::from(format!(
+                "/usr/lib/sigmaos/plugins/{}-{}",
+                id, version
+            ))),
             Ok(o) => Err(String::from_utf8_lossy(&o.stderr).trim().to_string()),
             Err(e) => Err(format!("sigmaos-plugins unavailable: {}", e)),
         }
     }
     fn uninstall(&self, id: &str) -> Result<(), String> {
         let out = std::process::Command::new("sigmaos-plugins")
-            .args(["remove", id]).output();
+            .args(["remove", id])
+            .output();
         match out {
             Ok(o) if o.status.success() => Ok(()),
             Ok(o) => Err(String::from_utf8_lossy(&o.stderr).trim().to_string()),
@@ -123,12 +126,21 @@ impl MarketBackend for HostBackend {
         let p = PathBuf::from(home).join(".local/share/sigmaos/plugins.json");
         let txt = std::fs::read_to_string(p).ok()?;
         let v: serde_json::Value = serde_json::from_str(&txt).ok()?;
-        v.get("plugins")?.as_array()?.iter()
+        v.get("plugins")?
+            .as_array()?
+            .iter()
             .find(|pl| pl.pointer("/manifest/id").and_then(|x| x.as_str()) == Some(id))
-            .and_then(|pl| pl.pointer("/manifest/version").and_then(|x| x.as_str()).map(|s| s.to_string()))
+            .and_then(|pl| {
+                pl.pointer("/manifest/version")
+                    .and_then(|x| x.as_str())
+                    .map(|s| s.to_string())
+            })
     }
     fn now_unix(&self) -> u64 {
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
     }
 }
 
@@ -140,25 +152,36 @@ pub struct FakeBackend {
 }
 impl FakeBackend {
     pub fn new() -> Self {
-        Self { installed: std::cell::RefCell::new(BTreeMap::new()),
-            now: std::cell::Cell::new(1_700_000_000), fail_install: std::cell::Cell::new(false) }
+        Self {
+            installed: std::cell::RefCell::new(BTreeMap::new()),
+            now: std::cell::Cell::new(1_700_000_000),
+            fail_install: std::cell::Cell::new(false),
+        }
     }
 }
 impl MarketBackend for FakeBackend {
     fn install(&self, id: &str, version: &str) -> Result<PathBuf, String> {
-        if self.fail_install.get() { return Err("network error".into()); }
-        self.installed.borrow_mut().insert(id.into(), (version.into(), self.now.get()));
+        if self.fail_install.get() {
+            return Err("network error".into());
+        }
+        self.installed
+            .borrow_mut()
+            .insert(id.into(), (version.into(), self.now.get()));
         Ok(PathBuf::from(format!("/fake/{}-{}", id, version)))
     }
     fn uninstall(&self, id: &str) -> Result<(), String> {
         self.installed.borrow_mut().remove(id);
         Ok(())
     }
-    fn is_installed(&self, id: &str) -> bool { self.installed.borrow().contains_key(id) }
-    fn installed_version(&self, id: &str) -> Option<String> {
-        self.installed.borrow().get(id).map(|(v,_)| v.clone())
+    fn is_installed(&self, id: &str) -> bool {
+        self.installed.borrow().contains_key(id)
     }
-    fn now_unix(&self) -> u64 { self.now.get() }
+    fn installed_version(&self, id: &str) -> Option<String> {
+        self.installed.borrow().get(id).map(|(v, _)| v.clone())
+    }
+    fn now_unix(&self) -> u64 {
+        self.now.get()
+    }
 }
 
 /// The marketplace.
@@ -171,37 +194,119 @@ pub struct SigmaOSPluginMarketplace {
 
 impl SigmaOSPluginMarketplace {
     pub fn new() -> Self {
-        let mut m = Self { catalog: BTreeMap::new(), installed: BTreeMap::new() };
+        let mut m = Self {
+            catalog: BTreeMap::new(),
+            installed: BTreeMap::new(),
+        };
         m.seed_catalog();
         m
     }
 
     fn seed_catalog(&mut self) {
-        let seeds: [(&str,&str,&str,&[&str],&str,&str,&[&str],f32,u64,&str); 6] = [
-            ("weather", "Weather Widget", "1.2.0", &["1.2.0","1.1.0","1.0.0"], "extension",
-             "Shows current weather in panel", &["weather","panel","info"], 4.5, 15234, "Apache-2.0"),
-            ("clipboard+", "Clipboard History+", "2.0.1", &["2.0.1","2.0.0","1.5.0"], "extension",
-             "Persistent clipboard history with search", &["clipboard","history","productivity"], 4.8, 45210, "MIT"),
-            ("nightlight", "Night Light", "1.0.3", &["1.0.3","1.0.2"], "service",
-             "Color temperature scheduler", &["display","eye-care","schedule"], 4.2, 8934, "GPL-3.0"),
-            ("podcast", "Podcast Client", "0.9.7", &["0.9.7","0.9.6"], "app",
-             "RSS podcast player with downloads", &["media","rss","podcast"], 4.0, 3210, "MIT"),
-            ("ssh-agent", "SSH Agent Panel", "1.1.0", &["1.1.0","1.0.0"], "extension",
-             "Visual SSH agent/key manager", &["ssh","security","keys"], 4.6, 6789, "Apache-2.0"),
-            ("theme-pack", "Community Theme Pack", "3.0.0", &["3.0.0","2.9.0"], "theme",
-             "20 community color themes", &["theme","appearance","colors"], 4.4, 22100, "CC0-1.0"),
+        let seeds: [(
+            &str,
+            &str,
+            &str,
+            &[&str],
+            &str,
+            &str,
+            &[&str],
+            f32,
+            u64,
+            &str,
+        ); 6] = [
+            (
+                "weather",
+                "Weather Widget",
+                "1.2.0",
+                &["1.2.0", "1.1.0", "1.0.0"],
+                "extension",
+                "Shows current weather in panel",
+                &["weather", "panel", "info"],
+                4.5,
+                15234,
+                "Apache-2.0",
+            ),
+            (
+                "clipboard+",
+                "Clipboard History+",
+                "2.0.1",
+                &["2.0.1", "2.0.0", "1.5.0"],
+                "extension",
+                "Persistent clipboard history with search",
+                &["clipboard", "history", "productivity"],
+                4.8,
+                45210,
+                "MIT",
+            ),
+            (
+                "nightlight",
+                "Night Light",
+                "1.0.3",
+                &["1.0.3", "1.0.2"],
+                "service",
+                "Color temperature scheduler",
+                &["display", "eye-care", "schedule"],
+                4.2,
+                8934,
+                "GPL-3.0",
+            ),
+            (
+                "podcast",
+                "Podcast Client",
+                "0.9.7",
+                &["0.9.7", "0.9.6"],
+                "app",
+                "RSS podcast player with downloads",
+                &["media", "rss", "podcast"],
+                4.0,
+                3210,
+                "MIT",
+            ),
+            (
+                "ssh-agent",
+                "SSH Agent Panel",
+                "1.1.0",
+                &["1.1.0", "1.0.0"],
+                "extension",
+                "Visual SSH agent/key manager",
+                &["ssh", "security", "keys"],
+                4.6,
+                6789,
+                "Apache-2.0",
+            ),
+            (
+                "theme-pack",
+                "Community Theme Pack",
+                "3.0.0",
+                &["3.0.0", "2.9.0"],
+                "theme",
+                "20 community color themes",
+                &["theme", "appearance", "colors"],
+                4.4,
+                22100,
+                "CC0-1.0",
+            ),
         ];
-        for (id,name,ver,vers,kind,desc,tags,rating,downloads,lic) in seeds {
-            self.catalog.insert(id.into(), CatalogEntry {
-                id: id.into(), name: name.into(), version: ver.into(),
-                versions: vers.iter().map(|s| s.to_string()).collect(),
-                description: desc.into(), kind: kind.into(),
-                author: "SigmaOS Community".into(),
-                source: format!("sigmaos-catalog://{}", id),
-                size_bytes: 1024 * 100, rating, downloads,
-                tags: tags.iter().map(|s| s.to_string()).collect(),
-                license: lic.into(),
-            });
+        for (id, name, ver, vers, kind, desc, tags, rating, downloads, lic) in seeds {
+            self.catalog.insert(
+                id.into(),
+                CatalogEntry {
+                    id: id.into(),
+                    name: name.into(),
+                    version: ver.into(),
+                    versions: vers.iter().map(|s| s.to_string()).collect(),
+                    description: desc.into(),
+                    kind: kind.into(),
+                    author: "SigmaOS Community".into(),
+                    source: format!("sigmaos-catalog://{}", id),
+                    size_bytes: 1024 * 100,
+                    rating,
+                    downloads,
+                    tags: tags.iter().map(|s| s.to_string()).collect(),
+                    license: lic.into(),
+                },
+            );
         }
     }
 
@@ -223,18 +328,26 @@ impl SigmaOSPluginMarketplace {
         let mut scored: Vec<(i32, &CatalogEntry)> = vec![];
         for e in self.catalog.values() {
             let mut score = 0i32;
-            if e.id.to_lowercase() == q { score += 100; }
-            if e.name.to_lowercase().contains(&q) { score += 50; }
-            if e.tags.iter().any(|t| t.to_lowercase().contains(&q)) { score += 30; }
-            if e.description.to_lowercase().contains(&q) { score += 10; }
+            if e.id.to_lowercase() == q {
+                score += 100;
+            }
+            if e.name.to_lowercase().contains(&q) {
+                score += 50;
+            }
+            if e.tags.iter().any(|t| t.to_lowercase().contains(&q)) {
+                score += 30;
+            }
+            if e.description.to_lowercase().contains(&q) {
+                score += 10;
+            }
             if score > 0 {
                 // rating as tiebreak
                 score += (e.rating * 10.0) as i32;
                 scored.push((score, e));
             }
         }
-        scored.sort_by(|a,b| b.0.cmp(&a.0).then(b.1.downloads.cmp(&a.1.downloads)));
-        scored.into_iter().map(|(_,e)| e).collect()
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.downloads.cmp(&a.1.downloads)));
+        scored.into_iter().map(|(_, e)| e).collect()
     }
 
     /// Browse by kind.
@@ -243,11 +356,21 @@ impl SigmaOSPluginMarketplace {
     }
 
     /// Get catalog entry.
-    pub fn entry(&self, id: &str) -> Option<&CatalogEntry> { self.catalog.get(id) }
+    pub fn entry(&self, id: &str) -> Option<&CatalogEntry> {
+        self.catalog.get(id)
+    }
 
     /// Install a plugin from catalog.
-    pub fn install<B: MarketBackend>(&mut self, be: &B, id: &str, version: Option<&str>) -> Result<(), MarketError> {
-        let entry = self.catalog.get(id).ok_or_else(|| MarketError::NotInCatalog(id.into()))?;
+    pub fn install<B: MarketBackend>(
+        &mut self,
+        be: &B,
+        id: &str,
+        version: Option<&str>,
+    ) -> Result<(), MarketError> {
+        let entry = self
+            .catalog
+            .get(id)
+            .ok_or_else(|| MarketError::NotInCatalog(id.into()))?;
         if self.installed.contains_key(id) {
             return Err(MarketError::AlreadyInstalled(id.into()));
         }
@@ -257,10 +380,15 @@ impl SigmaOSPluginMarketplace {
         }
         let path = be.install(id, ver).map_err(MarketError::Backend)?;
         let _ = path;
-        self.installed.insert(id.into(), InstalledEntry {
-            id: id.into(), version: ver.into(),
-            installed_unix: be.now_unix(), pinned: version.is_some(),
-        });
+        self.installed.insert(
+            id.into(),
+            InstalledEntry {
+                id: id.into(),
+                version: ver.into(),
+                installed_unix: be.now_unix(),
+                pinned: version.is_some(),
+            },
+        );
         Ok(())
     }
 
@@ -279,7 +407,9 @@ impl SigmaOSPluginMarketplace {
         // returns (id, installed_version, catalog_version)
         let mut out = vec![];
         for inst in self.installed.values() {
-            if inst.pinned { continue; }
+            if inst.pinned {
+                continue;
+            }
             if let Some(cat) = self.catalog.get(&inst.id) {
                 if cat.version != inst.version {
                     out.push((inst.id.clone(), inst.version.clone(), cat.version.clone()));
@@ -292,7 +422,9 @@ impl SigmaOSPluginMarketplace {
     /// Update all unpinned installs that have newer catalog versions.
     pub fn update_all<B: MarketBackend>(&mut self, be: &B) -> Result<Vec<String>, MarketError> {
         let updates = self.updates_available();
-        if updates.is_empty() { return Err(MarketError::NoUpdates); }
+        if updates.is_empty() {
+            return Err(MarketError::NoUpdates);
+        }
         let mut updated = vec![];
         for (id, old_ver, new_ver) in updates {
             // uninstall old, install new
@@ -307,7 +439,9 @@ impl SigmaOSPluginMarketplace {
     }
 
     /// Installed entries.
-    pub fn installed(&self) -> impl Iterator<Item = &InstalledEntry> { self.installed.values() }
+    pub fn installed(&self) -> impl Iterator<Item = &InstalledEntry> {
+        self.installed.values()
+    }
 
     /// Stats.
     pub fn stats(&self) -> (usize, usize) {
@@ -315,12 +449,16 @@ impl SigmaOSPluginMarketplace {
     }
 
     pub fn status_line(&self) -> String {
-        let (c,i) = self.stats();
+        let (c, i) = self.stats();
         format!("marketplace: {} catalog entries, {} installed", c, i)
     }
 }
 
-impl Default for SigmaOSPluginMarketplace { fn default() -> Self { Self::new() } }
+impl Default for SigmaOSPluginMarketplace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 // ---- persistence ----
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -330,22 +468,35 @@ struct Persist {
 }
 impl SigmaOSPluginMarketplace {
     pub fn save(&self, path: &Path) -> Result<(), String> {
-        let p = Persist { catalog: self.catalog.values().cloned().collect(),
-            installed: self.installed.values().cloned().collect() };
+        let p = Persist {
+            catalog: self.catalog.values().cloned().collect(),
+            installed: self.installed.values().cloned().collect(),
+        };
         let j = serde_json::to_string_pretty(&p).map_err(|e| e.to_string())?;
-        if let Some(d) = path.parent() { std::fs::create_dir_all(d).map_err(|e| e.to_string())?; }
+        if let Some(d) = path.parent() {
+            std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+        }
         std::fs::write(path, j).map_err(|e| e.to_string())
     }
     pub fn load(path: &Path) -> Result<Self, String> {
         let txt = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
         let p: Persist = serde_json::from_str(&txt).map_err(|e| e.to_string())?;
-        let mut m = Self { catalog: BTreeMap::new(), installed: BTreeMap::new() };
-        for e in p.catalog { m.catalog.insert(e.id.clone(), e); }
-        for i in p.installed { m.installed.insert(i.id.clone(), i); }
+        let mut m = Self {
+            catalog: BTreeMap::new(),
+            installed: BTreeMap::new(),
+        };
+        for e in p.catalog {
+            m.catalog.insert(e.id.clone(), e);
+        }
+        for i in p.installed {
+            m.installed.insert(i.id.clone(), i);
+        }
         Ok(m)
     }
     pub fn default_path() -> PathBuf {
-        if let Ok(p) = std::env::var("SIGMAOS_MARKET_FILE") { return PathBuf::from(p); }
+        if let Ok(p) = std::env::var("SIGMAOS_MARKET_FILE") {
+            return PathBuf::from(p);
+        }
         PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/tmp".into()))
             .join(".local/share/sigmaos/marketplace.json")
     }
@@ -393,7 +544,7 @@ mod tests {
         m.install(&be, "weather", None).unwrap();
         assert!(be.is_installed("weather"));
         assert_eq!(m.installed.get("weather").unwrap().version, "1.2.0"); // latest
-        // duplicate rejected
+                                                                          // duplicate rejected
         assert!(m.install(&be, "weather", None).is_err());
         // specific version
         let mut m2 = SigmaOSPluginMarketplace::new();
@@ -429,9 +580,18 @@ mod tests {
         let mut m = SigmaOSPluginMarketplace::new();
         let be = FakeBackend::new();
         // install old version of weather (1.1.0) — but catalog latest is 1.2.0
-        be.installed.borrow_mut().insert("weather".into(), ("1.1.0".into(), 100u64));
-        m.installed.insert("weather".into(), InstalledEntry {
-            id:"weather".into(), version:"1.1.0".into(), installed_unix:100, pinned:false });
+        be.installed
+            .borrow_mut()
+            .insert("weather".into(), ("1.1.0".into(), 100u64));
+        m.installed.insert(
+            "weather".into(),
+            InstalledEntry {
+                id: "weather".into(),
+                version: "1.1.0".into(),
+                installed_unix: 100,
+                pinned: false,
+            },
+        );
         let updates = m.updates_available();
         assert_eq!(updates.len(), 1);
         assert_eq!(updates[0].0, "weather");
@@ -447,12 +607,30 @@ mod tests {
         let mut m = SigmaOSPluginMarketplace::new();
         let be = FakeBackend::new();
         // two outdated installs
-        be.installed.borrow_mut().insert("weather".into(), ("1.1.0".into(), 100u64));
-        be.installed.borrow_mut().insert("nightlight".into(), ("1.0.2".into(), 100u64));
-        m.installed.insert("weather".into(), InstalledEntry {
-            id:"weather".into(), version:"1.1.0".into(), installed_unix:100, pinned:false });
-        m.installed.insert("nightlight".into(), InstalledEntry {
-            id:"nightlight".into(), version:"1.0.2".into(), installed_unix:100, pinned:false });
+        be.installed
+            .borrow_mut()
+            .insert("weather".into(), ("1.1.0".into(), 100u64));
+        be.installed
+            .borrow_mut()
+            .insert("nightlight".into(), ("1.0.2".into(), 100u64));
+        m.installed.insert(
+            "weather".into(),
+            InstalledEntry {
+                id: "weather".into(),
+                version: "1.1.0".into(),
+                installed_unix: 100,
+                pinned: false,
+            },
+        );
+        m.installed.insert(
+            "nightlight".into(),
+            InstalledEntry {
+                id: "nightlight".into(),
+                version: "1.0.2".into(),
+                installed_unix: 100,
+                pinned: false,
+            },
+        );
         let updated = m.update_all(&be).unwrap();
         assert_eq!(updated.len(), 2);
         assert_eq!(m.installed.get("weather").unwrap().version, "1.2.0");
@@ -464,14 +642,29 @@ mod tests {
     #[test]
     fn catalog_entry_management() {
         let mut m = SigmaOSPluginMarketplace::new();
-        let e = CatalogEntry { id:"custom".into(), name:"Custom".into(), version:"0.1.0".into(),
-            versions:vec!["0.1.0".into()], description:"test".into(), kind:"extension".into(),
-            author:"me".into(), source:"local".into(), size_bytes:0, rating:5.0,
-            downloads:0, tags:vec![], license:"MIT".into() };
+        let e = CatalogEntry {
+            id: "custom".into(),
+            name: "Custom".into(),
+            version: "0.1.0".into(),
+            versions: vec!["0.1.0".into()],
+            description: "test".into(),
+            kind: "extension".into(),
+            author: "me".into(),
+            source: "local".into(),
+            size_bytes: 0,
+            rating: 5.0,
+            downloads: 0,
+            tags: vec![],
+            license: "MIT".into(),
+        };
         m.add_entry(e).unwrap();
         assert!(m.entry("custom").is_some());
         // update entry
-        let e2 = CatalogEntry { version:"0.2.0".into(), versions:vec!["0.2.0".into(),"0.1.0".into()], ..m.catalog.get("custom").unwrap().clone() };
+        let e2 = CatalogEntry {
+            version: "0.2.0".into(),
+            versions: vec!["0.2.0".into(), "0.1.0".into()],
+            ..m.catalog.get("custom").unwrap().clone()
+        };
         m.add_entry(e2).unwrap();
         assert_eq!(m.entry("custom").unwrap().version, "0.2.0");
     }
